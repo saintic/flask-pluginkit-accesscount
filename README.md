@@ -1,6 +1,6 @@
 # AccessCount
 
-IP、PV、Endpoint统计插件
+IP、PV、Endpoint 统计插件
 
 ## Installation
 
@@ -8,7 +8,7 @@ IP、PV、Endpoint统计插件
 
 `pip install git+https://github.com/saintic/flask-pluginkit-accesscount@master`
 
-### PypI Release
+### PyPi Release
 
 `pip install flask-pluginkit-accesscount`
 
@@ -23,4 +23,3 @@ PluginManager(
     install_packages=dict(pkgs=["flask-pluginkit-accesscount"]),
 )
 ```
-
