@@ -19,7 +19,8 @@ __author__ = "Hiroshi.tao <me@tcw.im>"
 __version__ = "0.1.0"
 __license__ = "BSD 3-Clause"
 __license_file__ = "LICENSE"
-__readnd_file__ = "README.md"
+__readme_file__ = "README.md"
+__url__ = "https://github.com/saintic/flask-pluginkit-accesscount"
 __state__ = "enabled"
 
 
@@ -28,7 +29,7 @@ def get_time(fm="%Y-%m-%d %H:%M:%S"):
     return datetime.now().strftime(fm)
 
 
-def record_ip_pv():
+def record_ip_pv(response):
     """记录ip、ip"""
     today = get_time("%Y%m%d")
     prefix = current_app.config.get("PLUGINKIT_ACCESSCOUNT_KEY_PREFIX") or "pluginkit"
@@ -40,8 +41,9 @@ def record_ip_pv():
         current_app.config.get("PLUGINKIT_ACCESSCOUNT_EPKEY")
         or f"{prefix}:AccessCount:endpoint:hash"
     )
+    conn_name = current_app.config.get("PLUGINKIT_ACCESSCOUNT_REDIS_CONN_NAME") or "redis"
     redis_url = current_app.config.get("PLUGINKIT_ACCESSCOUNT_REDIS_URL")
-    redis_conn = getattr(g, "redis", None)
+    redis_conn = getattr(g, conn_name, None)
     if not redis_url and not redis_conn:
         current_app.logger.error(
             "AccessCount plugin not found valid redis url or connection."
