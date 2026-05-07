@@ -20,7 +20,7 @@ from prettytable import PrettyTable
 __plugin_name__ = "AccessCount"
 __description__ = "IP、PV、Endpoint Statistics"
 __author__ = "Hiroshi.tao <me@tcw.im>"
-__version__ = "0.3.0"
+__version__ = "0.3.1"
 __license__ = "BSD 3-Clause"
 __license_file__ = "LICENSE"
 __readme_file__ = "README.md"
@@ -30,9 +30,9 @@ __state__ = "enabled"
 # 默认key前缀
 default_key_prefix: str = "pluginkit"
 # 刷新次数，默认100次，即达到累计次数后写入redis
-default_flush_times = 10
+default_flush_times = 100
 # 刷新间隔，默认60秒，即达到时间间隔后写入redis
-default_flush_interval = 10
+default_flush_interval = 60
 
 # 进程统计数据，格式为 {pid: dict(ep=dict(endpoint=count), pv=count),ts=timestamp,times=0}
 # ep 端点访问量, pv 访问量, ts 上次刷新的时间戳, times 累计访问次数
