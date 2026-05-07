@@ -10,22 +10,38 @@ PV and IP plugins for statistical access.
 """
 
 from datetime import datetime, date, timedelta
+from typing import Dict, Union
+from os import getpid
 
-from flask import current_app, request, g
+from flask import current_app, request, g, jsonify
 from flask_pluginkit import RedisStorage
 from prettytable import PrettyTable
 
 __plugin_name__ = "AccessCount"
 __description__ = "IP、PV、Endpoint Statistics"
 __author__ = "Hiroshi.tao <me@tcw.im>"
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 __license__ = "BSD 3-Clause"
 __license_file__ = "LICENSE"
 __readme_file__ = "README.md"
 __url__ = "https://github.com/saintic/flask-pluginkit-accesscount"
 __state__ = "enabled"
 
+# 默认key前缀
 default_key_prefix: str = "pluginkit"
+# 刷新次数，默认100次，即达到累计次数后写入redis
+default_flush_times = 10
+# 刷新间隔，默认60秒，即达到时间间隔后写入redis
+default_flush_interval = 10
+
+# 进程统计数据，格式为 {pid: dict(ep=dict(endpoint=count), pv=count),ts=timestamp,times=0}
+# ep 端点访问量, pv 访问量, ts 上次刷新的时间戳, times 累计访问次数
+proccess_stats_map: Dict[int, Dict[str, Union[Dict[str, int], int]]] = {}
+
+
+def get_time_stamp():
+    """获取今天时间戳"""
+    return int(datetime.now().timestamp())
 
 
 def get_time(fm="%Y-%m-%d %H:%M:%S"):
@@ -33,15 +49,48 @@ def get_time(fm="%Y-%m-%d %H:%M:%S"):
     return datetime.now().strftime(fm)
 
 
-def dayAgo(day: int):
-    """多少天以前"""
-    today = date.today()
-    oneday = timedelta(days=day)
-    return str(today - oneday)
+def initialize_stats():
+    """初始化统计数据"""
+    proccess_stats_map.clear()
+    proccess_stats_map[getpid()] = {
+        "ep": {},
+        "pv": 0,
+        "ts": get_time_stamp(),
+        "times": 0,
+    }
 
 
 def record_ip_pv(response):
     """记录ip、ip"""
+    if not proccess_stats_map:
+        initialize_stats()
+    pid = getpid()
+    if pid in proccess_stats_map:
+        proccess_stats_map[pid]["times"] += 1
+        proccess_stats_map[pid]["pv"] += 1
+        if request.endpoint:
+            proccess_stats_map[pid]["ep"][request.endpoint] = (
+                proccess_stats_map[pid]["ep"].get(request.endpoint, 0) + 1
+            )  # 端点访问量
+        # 每次记录后检查是否需要刷新数据到redis
+        _flush_times = current_app.config.get(
+            "PLUGINKIT_ACCESSCOUNT_FLUSH_TIMES", default_flush_times
+        )
+        _flush_interval = current_app.config.get(
+            "PLUGINKIT_ACCESSCOUNT_FLUSH_INTERVAL", default_flush_interval
+        )
+        _pass_time = get_time_stamp() - proccess_stats_map[pid]["ts"]
+        if (proccess_stats_map[pid]["times"] >= _flush_times) or (
+            _pass_time >= _flush_interval
+        ):
+            flush_to_redis()
+
+
+def flush_to_redis():
+    """刷入到redis"""
+    pid = getpid()
+    if pid not in proccess_stats_map:
+        return
     today = get_time("%Y%m%d")
     prefix = (
         current_app.config.get("PLUGINKIT_ACCESSCOUNT_KEY_PREFIX") or default_key_prefix
@@ -58,17 +107,35 @@ def record_ip_pv(response):
         return
     storage = RedisStorage(redis_url=redis_url, redis_connection=redis_conn)
     pipe = storage._db.pipeline()
-    pipe.hincrby(pvKey, today, 1)
-    if request.endpoint:
-        pipe.hincrby(epKey, "%s:%s" % (today, request.endpoint), 1)
+    data = proccess_stats_map[pid]
+    pipe.hincrby(pvKey, today, data["pv"])
+    for ep, count in data["ep"].items():
+        pipe.hincrby(epKey, "%s:%s" % (today, ep), count)
     try:
         pipe.execute()
     except Exception as e:
         current_app.logger.error("AccessCount plugin write data failed", e)
+    else:
+        # 重置进程统计数据
+        initialize_stats()
 
 
 def register():
-    return dict(hep=dict(after_request=record_ip_pv))
+    return dict(
+        hep=dict(after_request=record_ip_pv),
+        vep=dict(
+            rule="/_internal/access_count_stats",
+            view_func=lambda: jsonify(proccess_stats_map),
+            endpoint="access_count_stats",
+        ),
+    )
+
+
+def dayAgo(day: int):
+    """多少天以前"""
+    today = date.today()
+    oneday = timedelta(days=day)
+    return str(today - oneday)
 
 
 def print_pv(
