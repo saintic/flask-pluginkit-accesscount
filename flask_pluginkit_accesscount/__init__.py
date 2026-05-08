@@ -20,7 +20,7 @@ from prettytable import PrettyTable
 __plugin_name__ = "AccessCount"
 __description__ = "IP、PV、Endpoint Statistics"
 __author__ = "Hiroshi.tao <me@tcw.im>"
-__version__ = "0.3.1"
+__version__ = "0.3.2"
 __license__ = "BSD 3-Clause"
 __license_file__ = "LICENSE"
 __readme_file__ = "README.md"
@@ -165,8 +165,8 @@ def print_pv(
         for i in column:
             pipe.hget(key, i.replace("-", ""))
         row = pipe.execute()
-        row.append(sum(map(pv_value_filter, row)) / day)
-    except Exception as e:
+        row.append(int(sum(map(pv_value_filter, row)) / day))
+    except Exception:
         raise
     else:
         column.append("平均")
